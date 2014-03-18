@@ -28,7 +28,8 @@ MS5611::MS5611(){
 	_T 		= 0;
 	_P 		= 0;
 	_lastTime 	= T_THR;
-	for(uint8_t k=0;k<N_PROM_PARAMS;k++) _C[k]=0;
+	for(uint8_t k=0; k<N_PROM_PARAMS; k++) 
+		_C[k]=0;
 }
 
 
