@@ -1,9 +1,10 @@
 /*
 MS5611.h
-Library for barometric pressure sensor SM5611 on I2C with arduino
+Library for barometric pressure sensor MS5611-01BA on I2C with arduino
 
 by Petr Gronat@2014
 */
+#define OSR 					2		// 0-3
 #define CMD_RESET 				0x1E
 #define CMD_ADC_READ			0x00
 #define CMD_CONV_D1_BASE 		0x40
@@ -14,13 +15,16 @@ by Petr Gronat@2014
 #define NBYTES_CONV 			3
 #define NBYTES_PROM 			2
 
-// temperature sampling period threshold [milliseconds]
-#define T_THR					1000;
+// Temperature sampling period threshold [milliseconds]
+// Kindly read the comment bellow in getPressure() method
+#define T_THR					1000
 /*
 TODO:
-Defaul values:
-Oversampling ratio for temperature and pressure
-To be able to modify time threshold for temperature update T_THR
+1) Separate OSR for temperature and pressure
+2) Timedelay empirical formula for temperature oversampling
+3) Precidion pressure celibration for high temperature
+4) Default and optional OSR
+5) Documentation
 */
 
 #include "MS5611.h"
@@ -29,66 +33,58 @@ MS5611::MS5611(){
 	_P 		= 0;
 	_lastTime 	= T_THR;
 	for(uint8_t k=0; k<N_PROM_PARAMS; k++) 
-		_C[k]=0;
+		_C[k]=69;
 }
 
-
 void MS5611::begin(){
+	Wire.begin();
 	reset();
 	delay(100);
 	readCalibration();
 }
 
 int32_t	MS5611::getPressure(){
-	getTemperature(); 		//update temperature _dT and _T
+	getTemperature(); 		//updates temperature _dT and _T
 	uint32_t D1 = getRawPressure();
-	Serial.println("fooo");
-	Serial.print("D1: "); Serial.println( D1 );
-	Serial.print("dT: "); Serial.println( _dT );
 	
-	// int64_t OFF  = (int64_t)_C[2-1]*(int64_t)pow(2,16) 
-	// 			 + (int64_t)_C[4-1]*(int64_t)_dT/(int64_t)pow(2,7);
 	int64_t OFF  = (int64_t)_C[2-1]*65536 
 				 + (int64_t)_C[4-1]*_dT/128;
-	Serial.print("OFF: "); Serial.println( (int32_t) (OFF/65536 ) );
 	
 	int64_t SENS = (int64_t)_C[1-1]*32768 
 				 + (int64_t)_C[3-1]*_dT/256;
-	Serial.print("SENS: "); Serial.println( (int32_t) (SENS) );
-	
-	//OFF = (long long)_C[2-1] * 65536 + ((long long)_C[4-1] * _dT ) / 128;
-    //SENS = (long long)_C[1-1] * 32768 + ((long long)_C[3-1] * _dT) / 256;
-	//_P 	 = ( ((int64_t)D1*SENS)/2097152-OFF)/32768;
 	_P = (D1*SENS/2097152 - OFF)/32768;
-
 	return _P;
 }
 
 uint32_t MS5611::getRawPressure(){
-	sendCommand(CMD_CONV_D2_BASE+0*CONV_REG_SIZE);	//read sensor, prepare a data
-	delay(9); 										//wait at least 8.33us
-	sendCommand(CMD_ADC_READ); 						//get ready for reading the data
-	return readnBytes(NBYTES_CONV);		//reading the data
+	sendCommand(CMD_CONV_D1_BASE+OSR*CONV_REG_SIZE);	//read sensor, prepare a data
+	delay(1+2*OSR); 									//wait at least 8.33us for full oversampling
+	sendCommand(CMD_ADC_READ); 							//get ready for reading the data
+	return readnBytes(NBYTES_CONV);						//reading the data
 }
 
 int32_t MS5611::getTemperature(){
-	//if (abs(millis()-_lastTime)<T_THR)
-	//	return _T;
-	_lastTime = millis();
-	uint32_t 	D2 = getRawTemperature();
+	// Code below can be uncommented for slight speedup:
+	// NOTE: Be sure what you do! Notice that Delta 1C ~= Delta 2hPa
+	//****************
+	// if(abs(millis()-_lastTime)<T_THR)
+	// 	return _T;
+	//_lastTime = millis();
+	//****************
+	uint32_t D2; 	
+	D2  = getRawTemperature();
 	_dT = D2-((uint32_t)_C[5-1] * 256); 		//update '_dT'
 	// Below, 'dT' and '_C[6-1]'' must be casted in order to prevent overflow
-	// bitwise division is unpredictioble for signed integers
+	// A bitwise division can not be dobe since it is unpredictible for signed integers
 	_T = 2000 + ((int64_t)_dT * _C[6-1])/8388608;
 	return _T;
 }
 
-
 uint32_t MS5611::getRawTemperature(){	
-	sendCommand(CMD_CONV_D2_BASE+0*CONV_REG_SIZE);		//read sensor, prepare a data
-	delay(9); 						//wait at least 8.33us
-	sendCommand(CMD_ADC_READ); 		//get ready for reading the data
-	return readnBytes(NBYTES_CONV); //reading the data
+	sendCommand(CMD_CONV_D2_BASE+OSR*CONV_REG_SIZE);		//read sensor, prepare a data
+	delay(1+2*OSR); 										//wait at least 8.33us
+	sendCommand(CMD_ADC_READ); 								//get ready for reading the data
+	return readnBytes(NBYTES_CONV); 						//reading the data
 }
 
 void MS5611::readCalibration(){
@@ -115,8 +111,10 @@ uint32_t MS5611::readnBytes(uint8_t nBytes){
 		Wire.beginTransmission(ADD_MS5611);
 		Wire.requestFrom((uint8_t)ADD_MS5611, nBytes);
 			uint32_t data = 0;
-			if(Wire.available()!=nBytes)
-				return NULL; 									// device unavailable or other error
+			if(Wire.available()!=nBytes){
+				Wire.endTransmission();
+				return NULL;
+			}
 			for (int8_t k=nBytes-1; k>=0; k--)
 				data |= ( (uint32_t) Wire.read() << (8*k) ); 	// concantenate bytes
 		Wire.endTransmission();

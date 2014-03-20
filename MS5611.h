@@ -1,6 +1,6 @@
 /*
 ms5611.h
-Library for barometric pressure sensor SM5611 on I2C with arduino
+Library for barometric pressure sensor MS5611-01BA on I2C with arduino
 
 by Petr Gronat@2014
 */
@@ -14,6 +14,7 @@ by Petr Gronat@2014
 #include <Wire.h>
 
 #define N_PROM_PARAMS 6
+
 
 // address of the device MS5611
 #define ADD_MS5611 0x77 	// can be 0x76 if CSB pin is connected to GND
