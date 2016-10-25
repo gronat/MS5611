@@ -12,3 +12,29 @@ of the absolute altitude at the 200m above the see level was estimated at cca 20
 
 Therefore, be aware of using MS5611 in temperature unstable environments where device rely on absolute
 altitude.
+
+## Minimalistic example:
+### Reads pressure and sends to serial monitor (UART)
+
+```cpp
+#include <MS5611.h>
+
+MS5611 baro;
+int32_t pressure;
+
+void setup() {
+  // Start barometer
+  baro = MS5611();
+  baro.begin();
+  // Start serial (UART)
+  Serial.begin(9600);
+  delay(2);
+}
+
+void loop() {
+  // Read pressure
+  pressure = baro.getPressure();
+  // Send pressure via serial (UART);
+  Serial.println(pressure);
+}
+```
