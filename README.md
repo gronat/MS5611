@@ -14,7 +14,7 @@ Therefore, be aware of using MS5611 in temperature unstable environments where d
 altitude.
 
 ## Minimalistic example:
-### Reads pressure and sends to serial monitor (UART)
+### Reads pressure and sends the value to the serial monitor (UART)
 
 ```cpp
 #include <MS5611.h>
